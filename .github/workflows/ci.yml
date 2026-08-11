@@ -100,6 +100,9 @@ jobs:
 
       # Scaffold from THIS ref (giget pulls the template from GitHub), then
       # install + build the generated portal. Exercises `npm create portaljs`.
+      # --repo targets the repo this workflow is actually running in — on a
+      # fork PR that's the fork, not datopian/portaljs, since the head branch
+      # only exists there. See po-scaffold-repo.
       - name: Scaffold + build a portal
         env:
           # Avoid unauthenticated GitHub API rate limits when giget fetches.
@@ -109,6 +112,7 @@ jobs:
             --yes --no-git \
             --namespace theme \
             --name "Smoke Portal" \
+            --repo "${{ github.repository }}" \
             --ref "${{ github.head_ref || github.ref_name }}"
           cd smoke-portal
           npm run build
