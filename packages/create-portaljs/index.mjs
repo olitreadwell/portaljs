@@ -33,7 +33,17 @@ const SKILLS = [
 ]
 
 function parseArgs(argv) {
-  const o = { install: true, git: true, yes: false, ref: 'main' }
+  // Template source repo. Defaults to upstream so `npm create portaljs@latest`
+  // is unaffected. Override via --repo or PORTALJS_TEMPLATE_REPO — used by CI
+  // to scaffold from the repo the workflow is actually running in (a fork PR's
+  // branch only exists on the fork, not on datopian/portaljs). See po-scaffold-repo.
+  const o = {
+    install: true,
+    git: true,
+    yes: false,
+    ref: 'main',
+    repo: process.env.PORTALJS_TEMPLATE_REPO || 'datopian/portaljs',
+  }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     if (a === '-h' || a === '--help') o.help = true
@@ -44,6 +54,7 @@ function parseArgs(argv) {
     else if (a === '--name') o.name = argv[++i]
     else if (a === '--description') o.description = argv[++i]
     else if (a === '--ref') o.ref = argv[++i]
+    else if (a === '--repo') o.repo = argv[++i]
     else if (a.startsWith('--')) {
       const [k, v] = a.slice(2).split('=')
       if (v !== undefined) o[k] = v
@@ -63,6 +74,8 @@ Options:
   --name <string>            Human project name (default: from directory)
   --description <string>     One-line description
   --ref <git-ref>            Template ref to fetch (default: main)
+  --repo <owner/repo>        Template source repo (default: datopian/portaljs,
+                             or $PORTALJS_TEMPLATE_REPO if set)
   --no-install               Skip npm install
   --no-git                   Skip git init
   -y, --yes                  Accept defaults, no prompts
@@ -277,7 +290,7 @@ async function main() {
   // 3. Fetch the template (reliable subdir extraction; no degit fallback bug).
   console.log(`\nScaffolding ${name} → ${dir} (template @ ${opts.ref})`)
   try {
-    await downloadTemplate(`github:datopian/portaljs/${TEMPLATE}#${opts.ref}`, {
+    await downloadTemplate(`github:${opts.repo}/${TEMPLATE}#${opts.ref}`, {
       dir: target,
       force: true,
     })
@@ -310,7 +323,7 @@ async function main() {
   // Non-fatal: a fetch failure just prints the manual install one-liner.
   const skillsDir = join(target, '.claude', 'commands')
   try {
-    await downloadTemplate(`github:datopian/portaljs/${SKILLS_SRC}#${opts.ref}`, {
+    await downloadTemplate(`github:${opts.repo}/${SKILLS_SRC}#${opts.ref}`, {
       dir: skillsDir,
       force: true,
     })
