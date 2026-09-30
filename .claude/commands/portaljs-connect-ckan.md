@@ -20,7 +20,7 @@ runtime dependency** — no opaque framework wiring.
 > `package_show`), is server-side only, ships zero client bytes, and has no React coupling.
 
 Use this for the "decoupled / any backend" path: the user has a CKAN data management
-system (their own or a public one) and wants a browseable portal in front of it.
+system (their own or a public one) and wants a browsable portal in front of it.
 
 **You can run this right after `/portaljs-new-portal`.** A fresh portal ships with a few sample
 datasets so it builds and renders immediately — you do NOT need to hand-author a static

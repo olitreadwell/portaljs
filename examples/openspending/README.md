@@ -84,7 +84,7 @@ It has:
 You can also add:
 
 - A `description` which is useful if you have more than one dataset for each repo, if not provided we are just going to use the repo description
-- A `Name` which is useful if you want to give your dataset a nice name, if not provided we are going to use the junction of the `owner` the `repo` + the path of the README, in the exaple above it will be `fivethirtyeight/data/nba-raptor`
+- A `Name` which is useful if you want to give your dataset a nice name, if not provided we are going to use the junction of the `owner` the `repo` + the path of the README, in the example above it will be `fivethirtyeight/data/nba-raptor`
 
 ### Extra commands
 
