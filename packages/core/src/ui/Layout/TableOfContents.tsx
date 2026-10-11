@@ -28,7 +28,10 @@ export const TableOfContents: React.FC<Props> = ({
 
   return (
     <nav aria-labelledby="on-this-page-title">
-      <h2 className="font-display text-md font-medium text-slate-900 dark:text-white">
+      <h2
+        id="on-this-page-title"
+        className="font-display text-md font-medium text-slate-900 dark:text-white"
+      >
         On this page
       </h2>
       <ol className="mt-4 space-y-3 text-sm">
