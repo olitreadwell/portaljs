@@ -1,5 +1,5 @@
 # datopian/portaljs context
-> refreshed 2026-09-30 | upstream default: main @ d5c096aa6a4c24c19f28d112400d0489b18aeaf8
+> refreshed 2026-10-11 | upstream default: main @ d5c096aa6a4c24c19f28d112400d0489b18aeaf8
 
 ## Identity & policies
 - upstream: datopian/portaljs, default branch `main`, primary language TypeScript, English-first (yes — README, CONTRIBUTING, all issues/docs in English).
@@ -32,6 +32,7 @@
 - `2026-08-12` self-found — CI/scaffold `fix/scaffold-template-repo-aware` (giget template repo + `--repo` flag) — pr-opened (fork PR #8, still open; older PR #7 closed as duplicate).
 - `2026-09-25`/`2026-09-26`/`2026-09-27` engine failures — `engine/run.sh` exited 1 with no trace (loop-trivial/loop log) — no work done.
 - `2026-09-30` self-found — trivial docs cleanup (typos + one dead example link) — pr-opened (fork PR #21, branch `docs/typo-and-dead-link-cleanup`, 10 files, 15 fixes; substantive fork CI green, only the known fork-artifact scaffold-e2e jobs red).
+- `2026-10-11` self-found — bug-fix/a11y `fix/toc-aria-labelledby` (both `On this page` navs declare `aria-labelledby="on-this-page-title"` but the `<h2>` had no `id`, so the IDREF resolved to nothing and the landmark name was empty; found with `computeAccessibleName`, not flagged by axe) — pr-opened (fork PR #22, `packages/core/src/ui/Layout/TableOfContents.tsx` + `site/components/Layout.tsx`; `npm run verify` green, site `tsc --noEmit` green).
 
 ## Mined gaps (discovered, not yet attempted)
 - `2026-09-30` trivial cleanup pass: misspellings in `packages/ckan-api-client-js/README.md` (`environemnt`, `avoing`), `site/content/opensource/docs/searching-datasets.md` (`everytime`), `examples/github-backed-catalog/README.md` + `examples/openspending/README.md` (`exaple`), `examples/turing/content/index.mdx` (`avaliable`), `examples/turing/content/datasets/abusive-eval-v1-0.md` (`IMPLICT` x2), `site/content/docs/skills/portaljs-connect-ckan.md` + `.claude/commands/portaljs-connect-ckan.md` (`browseable`), `CONTRIBUTING.md` ("do discuss" -> "to discuss"), `site/content/opensource/developers/create-data-catalog-portaljs-ckan.md` ("If yo go" -> "If you go"); dead link `github.com/datopian/datahub/tree/main/examples/ckan-example` (404; dir renamed to `examples/ckan`) in 3 places in `site/content/opensource/developers/create-data-catalog-portaljs-ckan.md` (`create-next-app --example` cmd, Vercel clone button, `[Repo]` link). — status: done (fork PR #21).
@@ -41,3 +42,4 @@
 - `2026-09-30` (not attempted) `examples/ckan-ssg/README.md` Vercel deploy button points at the old `examples/ckan-example` path; intended target ambiguous (`examples/ckan` vs `examples/ckan-ssg`) — needs maintainer input.
 - `2026-09-30` (not attempted) stale-but-redirecting `datopian/datahub` / `datopian/portal.js` URLs across example READMEs (301 -> portaljs; not dead, out of scope for a dead-link pass).
 - `2026-09-30` (not attempted) `CONTRIBUTING.md` lists a `packages/components` workspace that no longer exists (`@portaljs/components` is published but not built in this repo) — substantive doc restructure, not trivial.
+- `2026-10-11` (not attempted) issue #1458 ("Add WCAG 2.2 AA accessibility testing to CI/CD pipeline") was closed as completed on 2025-11-20, but nothing shipped: no `docs/a11y-ci.md`, no pa11y/playwright a11y job, no `generate:routes` script in `main`. A self-found gap if we ever want an a11y-CI contribution (needs a maintainer conversation first — reopening a "completed" item is a claim, not a drive-by fix).
