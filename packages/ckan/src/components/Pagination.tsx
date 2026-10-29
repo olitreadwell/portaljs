@@ -41,6 +41,8 @@ export default function Pagination({
       {Array.from(Array(Math.ceil(count / 5)).keys()).map((x) => (
         <button
           key={x}
+          aria-label={`Page ${x + 1}`}
+          aria-current={x == options.offset / 5 ? "page" : undefined}
           className={`${
             x == options.offset / 5 ? "bg-orange-500 text-white" : ""
           } px-2 rounded font-semibold text-zinc-900`}
