@@ -9,6 +9,10 @@ on:
       - main
   pull_request:
 
+# No job writes to the repo; cap GITHUB_TOKEN to read-only for all of them.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -37,7 +41,6 @@ jobs:
       - name: Build packages
         run: |
           npm run build -w @portaljs/ckan-api-client-js
-          npm run build -w @portaljs/core
           npm run build -w @portaljs/ckan
 
       - name: Lint @portaljs/ckan
@@ -49,6 +52,12 @@ jobs:
         run: |
           node --check packages/create-portaljs/index.mjs
           node packages/create-portaljs/index.mjs --help
+
+      # .claude-plugin/plugin.json is the source of truth for the shipped skills;
+      # fail if any other list of them (docs manifest, scaffold fallback, installer
+      # aliases, CLAUDE.md) or the files on disk disagree with it (#1671).
+      - name: Check shipped-skill lists are in sync
+        run: node scripts/check-skills-sync.mjs
 
       - name: Build catalog template
         working-directory: examples/portaljs-catalog
@@ -100,15 +109,24 @@ jobs:
 
       # Scaffold from THIS ref (giget pulls the template from GitHub), then
       # install + build the generated portal. Exercises `npm create portaljs`.
+      # --repo targets the repo this workflow is actually running in — on a
+      # fork PR that's the fork, not datopian/portaljs, since the head branch
+      # only exists there. See po-scaffold-repo.
       - name: Scaffold + build a portal
         env:
           # Avoid unauthenticated GitHub API rate limits when giget fetches.
           GIGET_AUTH: ${{ secrets.GITHUB_TOKEN }}
+          # Fetch the template at the commit under test. On pull_request this is
+          # the refs/pull/N/merge commit, which lives in this repo even for fork
+          # PRs (a fork's branch name does not, so giget 404s on it). Passed via
+          # env so the shell never parses an expression value as code.
+          PORTALJS_REF: ${{ github.sha }}
         run: |
           node packages/create-portaljs/index.mjs smoke-portal \
             --yes --no-git \
             --namespace theme \
             --name "Smoke Portal" \
-            --ref "${{ github.head_ref || github.ref_name }}"
+            --repo "${{ github.repository }}" \
+            --ref "$PORTALJS_REF"
           cd smoke-portal
           npm run build
