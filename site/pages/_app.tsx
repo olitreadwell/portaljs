@@ -4,7 +4,8 @@ import '@/styles/docsearch.css';
 import Script from 'next/script';
 import { generateDefaultSeo } from 'next-seo/pages';
 import Head from 'next/head';
-import { NavGroup, NavItem, pageview, ThemeProvider } from '@portaljs/core';
+import { ThemeProvider } from 'next-themes';
+import type { NavGroup, NavItem } from '@/lib/core';
 import siteConfig from '../config/siteConfig';
 import { useEffect } from 'react';
 import { useRouter } from 'next/dist/client/router';
@@ -52,6 +53,9 @@ if (typeof window !== 'undefined') {
   posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY as string, {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
     defaults: '2025-11-30',
+    // Surface client-side JS errors in Error Tracking (po-lr3) — off by default,
+    // so a page-level fault (e.g. on /build) was previously invisible to PostHog.
+    capture_exceptions: true,
     // Drop events from automated clients before they leave the browser (po-ywf).
     before_send: createBotFilter(),
     loaded: (posthog) => {

@@ -3,7 +3,7 @@
 Among other JS clients publicly available, the objectives of this one are:
 
 - **To be completely flexible in terms of which CKAN actions are supported**, so users specify which action should be called by its name rather than my importing and calling a method implemented specifically for the given action. This ensure that all core and custom actions are supported, including all possible parameters.
-- **To reduce repetition when calling CKAN actions**, by reading global configurations on environemnt variables (such as the CKAN URL) and having common configurations by default (e.g. all requests by default will have the "content-type" header set to "application/json", avoiding that requests are sent without it and avoing that this has to be repeated everywhere).
+- **To reduce repetition when calling CKAN actions**, by reading global configurations on environment variables (such as the CKAN URL) and having common configurations by default (e.g. all requests by default will have the "content-type" header set to "application/json", avoiding that requests are sent without it and avoiding that this has to be repeated everywhere).
 - **To properly handle errors**, by properly detecting when an error happened and throwing an error with a useful message that can be shown to the final users.
 - **To expose the underlying request properties**, so that anything can be customized e.g. headers
 

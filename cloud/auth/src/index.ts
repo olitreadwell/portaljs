@@ -24,9 +24,10 @@ import {
   sendMagicLinkEmail,
 } from './email'
 import { fetchGitHubUser, fetchVerifiedEmail } from './github'
-import { gateEmailSend } from './ratelimit'
+import { gateEmailSend, releaseEmailSend } from './ratelimit'
 import { captureServerEvent } from './analytics'
-import { upsertCrmSignup } from './crm'
+import { upsertCrmSignup, type CrmSource } from './crm'
+import { syncBookings } from './bookings'
 import { b64url, timingSafeEqual } from './util'
 
 export interface Env {
@@ -50,6 +51,11 @@ export interface Env {
   // isn't the boundary: both envs share one Twenty workspace).
   TWENTY_API_TOKEN?: string
   CRM_ENABLED?: string
+  // Calls-booked sync (da-55j.2, see bookings.ts). BOOKINGS_ENABLED is the send switch —
+  // "true" on production only (staging shares the PostHog project and the Twenty workspace).
+  // BOOKING_SCHEDULES optionally overrides which appointment schedules count.
+  BOOKINGS_ENABLED?: string
+  BOOKING_SCHEDULES?: string
 }
 
 const SESSION_COOKIE = 'arc_session'
@@ -63,6 +69,14 @@ const now = () => Math.floor(Date.now() / 1000)
 // "/" and not "//" (protocol-relative). Anything else falls back to the dashboard.
 function safeReturnPath(path: string | null | undefined): string {
   return path && path.startsWith('/') && !path.startsWith('//') ? path : '/'
+}
+
+// Both post-auth paths (GitHub OAuth callback, email magic-link verify) resolve to the SAME
+// two destinations — the CLI's /activate bounce or a plain /build sign-in — so both must
+// derive the CRM source the same way (po-hvd fixed an email-path hardcode of PORTALJS_BUILD
+// that ignored this).
+function crmSourceFor(dest: string): CrmSource {
+  return dest.startsWith('/activate') ? 'PORTALJS_CLI' : 'PORTALJS_BUILD'
 }
 
 function getCookie(request: Request, name: string): string | null {
@@ -178,6 +192,12 @@ export default {
     } catch (err) {
       return internalError(request, err)
     }
+  },
+  // Cron (wrangler.toml [triggers]): read new Google appointment bookings that Twenty has
+  // synced and send call_booked / call_cancelled to PostHog (da-55j.2). syncBookings never
+  // throws, so a failed tick just logs and the next one retries.
+  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(syncBookings(env))
   },
 }
 
@@ -299,9 +319,11 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
     // cookie set at /auth/login is what tells them apart — read it BEFORE the CRM pipe fires so
     // the write carries the right source instead of always PORTALJS_BUILD.
     const dest = safeReturnPath(getCookie(request, RETURN_COOKIE))
-    const source = dest.startsWith('/activate') ? 'PORTALJS_CLI' : 'PORTALJS_BUILD'
+    const source = crmSourceFor(dest)
     // CRM provenance pipe (po-jdr /build, po-k6n CLI). Fire-and-forget like trackSignup:
     // never blocks the redirect, never fails sign-in on a CRM hiccup.
+    // No fullName/org here: GitHub OAuth captures neither (has_org above is always false) —
+    // only the email/magic-link path below has them to pass.
     ctx.waitUntil(upsertCrmSignup(env, { email, login: gh.login, source }))
     const session = await signSession(uid, env.SESSION_SECRET, now())
     const h = new Headers()
@@ -355,11 +377,19 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       // when under the caps and returns false when over — in which case we silently skip
       // minting/sending. Either way the response below is identical (see neutrality note).
       const ip = request.headers.get('cf-connecting-ip') ?? ''
-      if (await gateEmailSend(env.DB, now(), email, ip)) {
+      const gate = await gateEmailSend(env.DB, now(), email, ip)
+      if (gate.allowed) {
         const { token } = await createEmailLogin(env.DB, now(), email, { fullName, org }, ret === '/' ? undefined : ret, distinctId)
         const link = `${env.BASE_URL}/email/verify?token=${encodeURIComponent(token)}`
-        // Fire the send but don't leak its success/failure into the response (neutrality).
-        await sendMagicLinkEmail(env, email, link)
+        // Fire the send but don't leak its success/failure into the response (neutrality) —
+        // sendMagicLinkEmail logs failures server-side (wrangler tail) for the operator.
+        const sent = await sendMagicLinkEmail(env, email, link)
+        // A send that never arrived must not also burn the caller's quota (po-0k2): release
+        // the reservation gateEmailSend took so a Resend outage doesn't compound into a
+        // rate-limit lockout once it recovers.
+        if (!sent && gate.logId) {
+          await releaseEmailSend(env.DB, gate.logId)
+        }
       }
     }
     // Echo back a best-effort address for the "check your email" copy; if it was invalid
@@ -411,12 +441,24 @@ async function handle(request: Request, env: Env, ctx: ExecutionContext): Promis
       from_build: !!result.distinctId,
       arc_user_id: uid,
     })
-    // CRM provenance pipe (po-jdr) — /build surface only. Fire-and-forget like trackSignup.
-    ctx.waitUntil(upsertCrmSignup(env, { email: result.email, source: 'PORTALJS_BUILD' }))
+    // CRM provenance pipe (po-jdr /build, po-hvd name+org). Fire-and-forget like trackSignup.
+    // dest computed here (not just at redirect time) so source is derived the same way as the
+    // OAuth callback (po-hvd) — this path is form-only today (/build has no /activate return),
+    // but hardcoding PORTALJS_BUILD silently mislabels the moment an email form appears
+    // elsewhere, e.g. a CLI activation email.
+    const dest = safeReturnPath(result.returnPath)
+    ctx.waitUntil(
+      upsertCrmSignup(env, {
+        email: result.email,
+        fullName: result.fullName,
+        org: result.org,
+        source: crmSourceFor(dest),
+      })
+    )
     const session = await signSession(uid, env.SESSION_SECRET, now())
     const h = new Headers()
     h.append('set-cookie', cookie(SESSION_COOKIE, session, SESSION_MAX_AGE))
-    return redirect(safeReturnPath(result.returnPath), h)
+    return redirect(dest, h)
   }
 
   // --- Device-authorization flow (CLI sign-in; po-j57) ---

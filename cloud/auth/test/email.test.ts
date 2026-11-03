@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   normalizeEmail,
   isValidEmail,
@@ -6,6 +6,8 @@ import {
   createEmailLogin,
   peekEmailLogin,
   verifyEmailLogin,
+  generateEmailToken,
+  sendMagicLinkEmail,
   EMAIL_TOKEN_TTL,
 } from '../src/email'
 import { upsertEmailUser } from '../src/tokens'
@@ -128,6 +130,71 @@ describe('email address helpers', () => {
     expect(isValidEmail('a@b')).toBe(false)
     expect(isValidEmail('a @b.co')).toBe(false)
     expect(isValidEmail('')).toBe(false)
+  })
+})
+
+// po-r80: a security gateway / QP transcoder somewhere in mail delivery can mistake a raw
+// '=' followed by two hex digits ("=2B") for a quoted-printable escape and mangle the link
+// ("?token=2Bxyz…" -> "?token+xyz…"). The magic link's only '=' is the fixed "?token="
+// separator, so the fix guarantees the character right after it is never a hex digit —
+// proven here across many random tokens, not just absent from one sample.
+describe('generateEmailToken (QP-escape-collision safety, po-r80)', () => {
+  it('never produces a token whose start forms a "=<hex><hex>" QP-escape-ambiguous link', () => {
+    for (let i = 0; i < 1000; i++) {
+      const token = generateEmailToken()
+      const link = `https://arc.portaljs.com/email/verify?token=${token}`
+      expect(link).not.toMatch(/=[0-9a-fA-F]{2}/)
+    }
+  })
+})
+
+// po-0k2: a Resend failure used to vanish completely — res.ok reduced to a bool, discarded
+// by the caller, no log, no throw, no metric, so a real outage looked identical to success
+// from every signal we had (see the bead: seven silently-failed sends, misdiagnosed twice).
+// These prove the operator-side truth now exists in exactly the two ways a send can fail.
+describe('sendMagicLinkEmail failure visibility (po-0k2)', () => {
+  const env = { RESEND_API_KEY: 'x', EMAIL_FROM: 'Arc <login@arc.portaljs.com>' }
+  const realFetch = globalThis.fetch
+
+  it('logs status + response body and returns false on a non-ok Resend response', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('{"message":"invalid api key"}', { status: 401 })) as any
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const ok = await sendMagicLinkEmail(env, 'user@example.com', 'https://arc.portaljs.com/email/verify?token=zabc')
+      expect(ok).toBe(false)
+      expect(errorSpy).toHaveBeenCalledWith('magic-link send failed', 401, expect.stringContaining('invalid api key'))
+    } finally {
+      errorSpy.mockRestore()
+      globalThis.fetch = realFetch
+    }
+  })
+
+  it('logs the thrown error and returns false when the fetch itself throws (e.g. a timeout)', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('network timeout')
+    }) as any
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const ok = await sendMagicLinkEmail(env, 'user@example.com', 'https://arc.portaljs.com/email/verify?token=zabc')
+      expect(ok).toBe(false)
+      expect(errorSpy).toHaveBeenCalledWith('magic-link send threw', 'network timeout')
+    } finally {
+      errorSpy.mockRestore()
+      globalThis.fetch = realFetch
+    }
+  })
+
+  it('returns true and logs nothing on a successful send', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 200 })) as any
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      const ok = await sendMagicLinkEmail(env, 'user@example.com', 'https://arc.portaljs.com/email/verify?token=zabc')
+      expect(ok).toBe(true)
+      expect(errorSpy).not.toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+      globalThis.fetch = realFetch
+    }
   })
 })
 

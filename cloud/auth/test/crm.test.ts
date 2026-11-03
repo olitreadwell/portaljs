@@ -58,6 +58,53 @@ describe('upsertCrmSignup (po-jdr, po-k6n)', () => {
     expect(body.source).toBe('PORTALJS_BUILD')
   })
 
+  // po-94q: `products` is multi-select, distinct from `source` — a new person starts their
+  // products array with just this write path's product.
+  it('seeds products with [PORTALJS] on create (po-94q)', async () => {
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'new@example.com', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.products).toEqual(['PORTALJS'])
+  })
+
+  // po-94q: an existing person with no products yet (pre-dates the field, or their first
+  // product was never PortalJS) gets PORTALJS appended without disturbing other array entries.
+  it('appends PORTALJS to an existing person\'s products on update, preserving other entries (po-94q)', async () => {
+    globalThis.fetch = vi.fn(async (url: any, init: any) => {
+      calls.push({ url: String(url), init })
+      if (String(url).includes('/people?filter=')) {
+        return { ok: true, json: async () => ({ data: { people: [{ id: 'person-1', products: ['DATAHUB'] }] } }) } as any
+      }
+      return { ok: true } as any
+    }) as any
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'existing@example.com', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.products).toEqual(['DATAHUB', 'PORTALJS'])
+  })
+
+  // po-94q: a repeat signup for a product the person already has must not resend/duplicate it —
+  // idempotency for `products` mirrors the idempotency already proven for the person match.
+  it('omits products from the PATCH payload when PORTALJS is already present (po-94q)', async () => {
+    globalThis.fetch = vi.fn(async (url: any, init: any) => {
+      calls.push({ url: String(url), init })
+      if (String(url).includes('/people?filter=')) {
+        return { ok: true, json: async () => ({ data: { people: [{ id: 'person-1', products: ['PORTALJS'] }] } }) } as any
+      }
+      return { ok: true } as any
+    }) as any
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'existing@example.com', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect('products' in body).toBe(false)
+  })
+
   it('PATCHes the existing person id when the lookup finds a match (idempotent)', async () => {
     globalThis.fetch = vi.fn(async (url: any, init: any) => {
       calls.push({ url: String(url), init })
@@ -73,6 +120,26 @@ describe('upsertCrmSignup (po-jdr, po-k6n)', () => {
     expect(calls).toHaveLength(2)
     expect(calls[1].url).toBe('https://crm.datopian.com/rest/people/person-1')
     expect(calls[1].init.method).toBe('PATCH')
+  })
+
+  // po-96l: source is first-touch attribution — a later signup on a different surface must
+  // not rewrite an existing row's source. Only POST (create) may carry source.
+  it('never includes source in the PATCH payload, so a second surface cannot overwrite first-touch attribution (po-96l)', async () => {
+    globalThis.fetch = vi.fn(async (url: any, init: any) => {
+      calls.push({ url: String(url), init })
+      if (String(url).includes('/people?filter=')) {
+        return { ok: true, json: async () => ({ data: { people: [{ id: 'person-1' }] } }) } as any
+      }
+      return { ok: true } as any
+    }) as any
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'existing@example.com', source: 'PORTALJS_CLI' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(calls[1].init.method).toBe('PATCH')
+    expect(body.source).toBeUndefined()
+    expect('source' in body).toBe(false)
   })
 
   it('matches on GitHub login + source when email is absent', async () => {
@@ -101,6 +168,43 @@ describe('upsertCrmSignup (po-jdr, po-k6n)', () => {
     expect(decodeURIComponent(calls[0].url)).not.toContain('PORTALJS_BUILD')
     const body = JSON.parse(calls[1].init.body)
     expect(body.source).toBe('PORTALJS_CLI')
+  })
+
+  it('splits a captured full name into Twenty\'s composite name.firstName/lastName (po-hvd)', async () => {
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'anuar@example.com', fullName: 'Anuar Ustayev', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.name).toEqual({ firstName: 'Anuar', lastName: 'Ustayev' })
+  })
+
+  it('gives a single-word full name an empty lastName instead of dropping it (po-hvd)', async () => {
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'cher@example.com', fullName: 'Cher', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.name).toEqual({ firstName: 'Cher', lastName: '' })
+  })
+
+  it('carries org through to the plain `organization` field (po-hvd)', async () => {
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'anuar@example.com', org: 'Datopian', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.organization).toBe('Datopian')
+  })
+
+  it('omits name and organization when neither a full name nor an org was captured (po-hvd)', async () => {
+    await upsertCrmSignup(
+      { TWENTY_API_TOKEN: 'tok', CRM_ENABLED: 'true' },
+      { email: 'noname@example.com', source: 'PORTALJS_BUILD' }
+    )
+    const body = JSON.parse(calls[1].init.body)
+    expect(body.name).toBeUndefined()
+    expect(body.organization).toBeUndefined()
   })
 
   it('logs and skips when both email and login are absent', async () => {

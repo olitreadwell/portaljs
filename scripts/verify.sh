@@ -23,7 +23,7 @@
 #               own self-test (scripts/verify-selftest.sh)
 #   typecheck   tsc --noEmit for each cloud service
 #   test        vitest for each cloud service
-#   build       build the three published @portaljs/* packages
+#   build       build the @portaljs/ckan-api-client-js and @portaljs/ckan packages
 #
 # Deliberately NOT gated here (each needs something the gate cannot assume):
 #   packages/ckan-api-client-js `npm test`  — mocha against a live CKAN instance
@@ -39,7 +39,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
 
 CLOUD_SERVICES=(api auth worker)
-PACKAGES=(ckan-api-client-js core ckan)
+PACKAGES=(ckan-api-client-js ckan)
 ALL_STAGES=(setup lint typecheck test build)
 
 ran=0        # commands actually executed across this whole run
@@ -108,6 +108,9 @@ stage_lint() {
   run "lint @portaljs/ckan" . npm run lint -w @portaljs/ckan
   # Fails when README / site docs / sidebar have drifted from skills-manifest.mjs.
   run "gen:skills:check" . npm run gen:skills:check
+  # Fails when a shipped-skill list (manifest, scaffold fallback, installer
+  # aliases, CLAUDE.md) disagrees with .claude-plugin/plugin.json (#1671).
+  run "skills:check" . npm run skills:check
   # Asserts this script still fails an empty run — the property po-mz4 is about.
   run "verify.sh self-test" . bash scripts/verify-selftest.sh
   # Asserts the nav + landing hero still lead to a page that can actually sign a

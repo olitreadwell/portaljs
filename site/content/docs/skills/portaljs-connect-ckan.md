@@ -16,7 +16,7 @@ dependency** — no opaque framework wiring.
 ## When to use it
 
 Use it for the **decoupled / any-backend** path: you have a CKAN data management
-system (your own or a public one) and want a browseable portal in front of it.
+system (your own or a public one) and want a browsable portal in front of it.
 CKAN calls run **server-side** in `getStaticProps` / `getStaticPaths`, so the
 catalog is pre-rendered at build time and the site can still be statically deployed.
 
@@ -54,6 +54,9 @@ Restricted to specific organizations:
 - `pages/[owner]/[slug].tsx` — the showcase route, repointed to pre-render one
   showcase per dataset at `/@<namespace>/<slug>` via `package_show`, previewing
   CSV/TSV resources through the template's `Table`.
+- Any UI text it adds (headings, loading/empty/error messages) rendered through `t()`,
+  with its keys added to `locales/en.json` (and any other locale files), so the view
+  follows the portal's build-time language.
 
 It verifies the build before reporting success. When it finishes:
 
