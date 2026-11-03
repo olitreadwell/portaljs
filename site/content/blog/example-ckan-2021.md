@@ -2,6 +2,7 @@
 title: "Setup Guide: How to create a full-featured custom data portal frontend for CKAN with PortalJS"
 authors: ['Luccas Mateus']
 created: 2021-04-20
+categories: ['PortalJS', 'CKAN', 'Tutorial']
 ---
 
 We have created a full data portal demo using DataHub PortalJS all backed by a CKAN instance storing data and metadata, you can see below a screenshot of the homepage and of an individual dataset page.
@@ -14,7 +15,7 @@ We have created a full data portal demo using DataHub PortalJS all backed by a C
 To create a Portal app, run the following command in your terminal:
 
 ```console
-npx create-next-app -e https://github.com/datopian/datahub/tree/main/examples/ckan
+npx create-next-app -e https://github.com/datopian/portaljs/tree/59d816c73aa3569733ce26cf6c471d24b155d760/examples/ckan
 ```
 
 > NB: Under the hood, this uses the tool called create-next-app, which bootstraps an app for you based on our CKAN example.

@@ -6,7 +6,7 @@ description: Scaffold a production-ready PortalJS portal from a brief — a real
 ---
 
 `/portaljs-new-portal` scaffolds a production-ready PortalJS data portal from a short
-brief. It copies the canonical lightweight template, substitutes your project
+brief. It copies the canonical template, substitutes your project
 tokens, installs dependencies, and verifies the build — so you start from a
 working project, not a blank page.
 
@@ -26,14 +26,14 @@ A short brief in natural language. From it the skill extracts:
 | ----- | -------- | ----- |
 | Project name | Yes | Used for the page title; also derives the project slug (lowercase, hyphenated). |
 | Description | No | One sentence describing the portal. Defaults to "An open data portal." |
+| Language | No | The interface language — a name or code (e.g. "Italian", `it`, `pt-BR`). Defaults to English. |
 | Datasets | No | File paths or URLs mentioned in the brief — added later with `/portaljs-add-dataset`. |
 
 If no project name is found, the skill stops and asks for one.
 
-By default it copies `examples/portaljs-template`. For a portal with **many
-datasets** (dozens or more), it can use the `examples/portaljs-catalog` variant
-instead, which renders every dataset through one dynamic route from a
-`datasets.json` manifest.
+It copies the canonical template, `examples/portaljs-catalog` — the same one
+`npm create portaljs` scaffolds — which renders every dataset through one dynamic
+`/@<namespace>/<slug>` route from a `datasets.json` manifest.
 
 ## Example
 
@@ -47,6 +47,12 @@ Or simply:
 /portaljs-new-portal "Auckland Council open data portal"
 ```
 
+In another language:
+
+```
+/portaljs-new-portal Build an Italian open data portal for the Comune di Palermo
+```
+
 ## What it produces
 
 - A new project directory named after your project slug (e.g.
@@ -54,6 +60,10 @@ Or simply:
   Tailwind, and a few small React components** you can edit by hand.
 - Placeholder tokens (`__PROJECT_NAME__`, `__PROJECT_SLUG__`, `__DESCRIPTION__`)
   substituted throughout the project with your real values.
+- For a non-English portal, the UI translated into `locales/<code>.json` (every string,
+  with the language's plural forms), registered in `lib/i18n.ts`, and set as the
+  portal's language with `DEFAULT_LOCALE` in `next.config.js` — checked with
+  `npm run i18n:check`. Every build and deploy then ships that language.
 - Dependencies installed (`npm install`) and the build verified, so the project
   runs immediately.
 

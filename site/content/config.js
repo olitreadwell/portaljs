@@ -1,7 +1,7 @@
 const config = {
   title: 'Open-Source Open Data Portal in the Cloud | PortalJS',
   description:
-    'PortalJS Cloud is the easiest way to get started with Open Data. Perfect for governments, non-profits, academics, and companies of all sizes.',
+    'PortalJS Arc is the easiest way to get started with Open Data. Perfect for governments, non-profits, academics, and companies of all sizes.',
   navbarTitle: {
     logo: '/static/img/portaljs-logo.svg',
     text: 'PortalJS',
@@ -14,6 +14,10 @@ const config = {
   authorLogo: '/static/img/datopian-logo-white.svg',
   authorUrl: 'https://datopian.com/',
   navLinks: [
+    {
+      name: 'Government',
+      href: '/government',
+    },
     {
       name: 'Showcase',
       subItems: [
@@ -177,7 +181,7 @@ const config = {
         },
       ],
       description:
-        'PortalJS Cloud is the easiest way to get started with Open Data. Perfect for governments, non-profits, academics, and companies of all sizes.',
+        'PortalJS Arc is the easiest way to get started with Open Data. Perfect for governments, non-profits, academics, and companies of all sizes.',
     },
     twitter: {
       handle: '@PortalJS_',
