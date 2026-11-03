@@ -16,7 +16,7 @@ dependency** — no opaque framework wiring.
 ## When to use it
 
 Use it for the **decoupled / any-backend** path: you have a CKAN data management
-system (your own or a public one) and want a browseable portal in front of it.
+system (your own or a public one) and want a browsable portal in front of it.
 CKAN calls run **server-side** in `getStaticProps` / `getStaticPaths`, so the
 catalog is pre-rendered at build time and the site can still be statically deployed.
 
