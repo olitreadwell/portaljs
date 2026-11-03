@@ -27,7 +27,7 @@ export class CkanRequestError extends Error implements CkanErrorBody {
 
     if (error?.__type == CkanErrorType.ValidationError) {
       const errorFields = Object.keys(error).filter((f) => !f.startsWith("__"));
-      errorMessage = errorFields
+      errorMessage = errorFields.length
         ? errorFields
             .map((f) => {
               const errorField = error[f];
