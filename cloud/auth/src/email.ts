@@ -13,12 +13,23 @@ import { b64url, sha256Hex } from './util'
 
 export const EMAIL_TOKEN_TTL = 30 * 60 // seconds a magic link is valid before it must be re-requested
 
+// po-r80: the magic link is `${BASE_URL}/email/verify?token=<token>` — the ONLY literal '='
+// in the whole message is that query separator. Some hop in mail delivery (a security
+// gateway that rewrites/scans links, or a buggy quoted-printable transcoder) can mistake a
+// raw '=' followed by two hex digits (e.g. "=2B") for a QP escape and decode it to one byte,
+// silently corrupting the link ("?token=2Bxyz…" -> "?token+xyz…", losing the "2B" and
+// substituting '+' — 0x2B). b64url's alphabet includes hex-looking chars (0-9a-fA-F), so
+// ~12% of random tokens would start with two of them and be at risk. Prefixing every token
+// with a fixed non-hex character makes "=" always followed by a non-hex char, so the "=XY"
+// escape pattern can never form — closing the failure class regardless of the random bytes.
+const EMAIL_TOKEN_PREFIX = 'z' // not in 0-9a-fA-F
+
 // Long opaque secret embedded in the magic link; only its hash is stored, matching the
 // tokens / device_codes tables.
 export function generateEmailToken(): string {
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
-  return b64url(bytes)
+  return EMAIL_TOKEN_PREFIX + b64url(bytes)
 }
 
 // Canonicalize an address for storage/lookup: trim + lowercase. Case-insensitive so
@@ -199,22 +210,35 @@ export interface EmailEnv {
   EMAIL_FROM: string // e.g. "PortalJS Arc <login@arc.portaljs.com>"
 }
 
+// po-0k2: the caller's response to the user stays NEUTRAL no matter what happens here (no
+// address-enumeration signal) — so this function is the ONLY place a Resend failure can be
+// observed at all. It must not throw and must not let a failure pass silently: every non-ok
+// response and every thrown fetch (e.g. the intermittent Resend timeouts) is logged with
+// enough detail (status + body, or the error) to diagnose from `wrangler tail` alone.
 export async function sendMagicLinkEmail(env: EmailEnv, to: string, link: string): Promise<boolean> {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: env.EMAIL_FROM,
-      to,
-      subject: 'Sign in to PortalJS Arc',
-      text: `Sign in to PortalJS Arc:\n\n${link}\n\nThis link expires in 30 minutes. If you didn't request it, you can ignore this email.`,
-      html: magicLinkHtml(link),
-    }),
-  })
-  return res.ok
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${env.RESEND_API_KEY}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: env.EMAIL_FROM,
+        to,
+        subject: 'Sign in to PortalJS Arc',
+        text: `Sign in to PortalJS Arc:\n\n${link}\n\nThis link expires in 30 minutes. If you didn't request it, you can ignore this email.`,
+        html: magicLinkHtml(link),
+      }),
+    })
+    if (!res.ok) {
+      console.error('magic-link send failed', res.status, await res.text().catch(() => '<no body>'))
+    }
+    return res.ok
+  } catch (err) {
+    console.error('magic-link send threw', err instanceof Error ? err.message : String(err))
+    return false
+  }
 }
 
 function magicLinkHtml(link: string): string {

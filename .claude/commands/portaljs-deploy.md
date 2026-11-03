@@ -169,6 +169,9 @@ tail -30 /tmp/arc-build.log
 If `BUILD_EXIT` is non-zero, print the log and fix the error before continuing — never deploy
 a failing build. Confirm the export landed: `PORTAL_DIR/out/index.html` must exist.
 
+The UI language is baked in from `DEFAULT_LOCALE` in `next.config.js` — there is nothing to
+pass, and don't set `NEXT_PUBLIC_LOCALE` (it would override the portal's language).
+
 > Static export pre-renders every page at build time. A CKAN/`getStaticPaths` portal must use
 > `fallback: false` (the templates do). If the build complains about a dynamic route, that's
 > the cause.
@@ -249,13 +252,67 @@ echo "HTTP $HTTP"; cat /tmp/arc-resp.json
 ```
 
 Handle the response:
-- **200** — parse `url` from the JSON; that's the live portal.
+- **200** — parse `url` and `deployment_id` from the JSON; that's the live portal.
 - **401** — token invalid/expired/revoked → **re-run the device flow from step 2 once** to
   re-authenticate, then re-read the token and retry the upload a single time. If it 401s again,
   stop and surface the error (don't loop).
 - **409** — the slug is taken by another account → ask for a different `--slug`.
 - **400 / 413** — bad slug or upload too large → surface the JSON `error`.
 - anything else — print the body and stop; don't claim success.
+
+### 5.5. Persist a source snapshot (interim Artifacts workaround, po-ce7)
+
+Cloudflare Artifacts (the intended versioned-source backing, po-68u) is closed-beta and not
+yet enrolled on the Datopian account — this step is the bridge until it lands. Only the
+*built* export is uploaded above; nothing today persists the source tree that produced it, so
+a portal that was never committed anywhere deploys exactly as successfully as one that was
+(the failure mode `dpe-8qi` recovered from). Once step 5 returns 200 with a `deployment_id`,
+tar the **source** tree (not `out/`) and POST it to the deploy's source-snapshot endpoint —
+best-effort: a failure here must never fail the deploy, since the site is already live.
+
+```bash
+PORTAL_DIR="."                 # ← portal directory (step 1)
+DEPLOYMENT_ID="<from step 5's response>"
+API="${PORTALJS_ARC_API:-https://api.arc.portaljs.com}"
+# TOKEN already resolved in step 5.
+
+cd "$PORTAL_DIR"
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # gitignore-respecting: tracked + untracked-but-not-ignored files, so a project's real
+  # .gitignore (dist/, coverage/, custom caches, etc.) is honored instead of a fixed list.
+  # A hardcoded safety floor is applied on top regardless of .gitignore content/absence.
+  FILELIST=$(mktemp)
+  git ls-files --cached --others --exclude-standard \
+    | grep -Ev '^(node_modules|\.git|out|\.next)(/|$)' \
+    | grep -Ev '^\.env($|\.)' \
+    > "$FILELIST"
+  COPYFILE_DISABLE=1 tar czf /tmp/arc-source.tgz -T "$FILELIST"
+  rm -f "$FILELIST"
+else
+  echo "Warning: $PORTAL_DIR is not a git repo — no .gitignore to consult." \
+       "Falling back to the fixed exclude list for the source snapshot."
+  COPYFILE_DISABLE=1 tar czf /tmp/arc-source.tgz \
+    --exclude='./node_modules' --exclude='./.git' --exclude='./out' --exclude='./.next' \
+    --exclude='./.env' --exclude='./.env.*' \
+    -C . .
+fi
+
+HDR=$(mktemp); chmod 600 "$HDR"
+printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" > "$HDR"
+HTTP=$(curl -s -o /tmp/arc-source-resp.json -w "%{http_code}" -m 300 -K "$HDR" \
+  -X POST "$API/v1/deploy/$DEPLOYMENT_ID/source" \
+  --data-binary @/tmp/arc-source.tgz)
+rm -f "$HDR" /tmp/arc-source.tgz
+```
+
+- **200** — snapshot recorded; note it in the final report.
+- **409** — already recorded for this deployment (re-run of a step that partially succeeded) —
+  not an error, treat as already-done.
+- anything else (network error, 413, …) — print a one-line warning and continue; **do not**
+  fail the overall deploy over this step. The build output is already live either way.
+
+Retrieval (owner or Datopian staff only): `GET $API/v1/repos/<slug>/sources` lists a slug's
+snapshot history; `GET $API/v1/repos/<slug>/sources/<deployment_id>` downloads one, gzipped.
 
 ### 6. Report
 
@@ -264,6 +321,8 @@ Handle the response:
   - URL:   https://SLUG.arc.portaljs.com
   - Files: <n>   (<bytes> uploaded, <pruned> stale file(s) removed)
   - Data:  <k> dataset(s) served from R2, <m> inline   (from the step 4 check)
+  - Source: snapshot saved (or: "not saved — <reason>", from step 5.5; never blocks success;
+    if PORTAL_DIR wasn't a git repo, note "saved via fixed exclude list — no .gitignore found")
   - Slug:  SLUG  (re-run /portaljs-deploy to update)
 
 Open the URL to view your live portal.

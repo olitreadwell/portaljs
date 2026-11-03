@@ -25,7 +25,7 @@ Before you refresh the page, however, you will need to run the following command
 npm run mddb
 ```
 
-This example makes use of the [markdowndb](https://github.com/datopian/markdowndb) library. For now the only thing you need to know is that you should run the command above everytime you make some change to `/content`.
+This example makes use of the [markdowndb](https://github.com/datopian/markdowndb) library. For now the only thing you need to know is that you should run the command above every time you make some change to `/content`.
 
 From the browser, access http://localhost:3000. You should see the following, you now have a searchable automatic list of your datasets:
 

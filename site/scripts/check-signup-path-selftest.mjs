@@ -26,6 +26,8 @@ const FILES = [
   'components/home/CtaBand.tsx',
   'pages/build.tsx',
   'pages/_app.tsx',
+  'pages/government.tsx',
+  'pages/book-a-demo.tsx',
 ]
 
 function runGuard(root) {
@@ -119,7 +121,7 @@ const cases = [
     'closing CTA demoted below a docs button',
     (d) =>
       edit(d, 'components/home/CtaBand.tsx', (s) =>
-        s.replace('<Link\n                href={BUILD_ROUTE}', '<a href={DOCS_URL} />\n              <Link\n                href={BUILD_ROUTE}'),
+        s.replace(/<Link\n(\s*)href=\{BUILD_ROUTE\}/, '<a href={DOCS_URL} />\n<Link\n$1href={BUILD_ROUTE}'),
       ),
   ],
   [
@@ -130,6 +132,40 @@ const cases = [
   // Deleting an entry point entirely must fail, not vacuously pass.
   ['the hero file is deleted', (d) => fs.rmSync(path.join(d, 'components/home/LandingHero.tsx'))],
   ['the closing CTA file is deleted', (d) => fs.rmSync(path.join(d, 'components/home/CtaBand.tsx'))],
+  // da-55j.5: the government page's one action is a call, and it must stay that way.
+  [
+    '/government loses its book-a-call link',
+    (d) => edit(d, 'pages/government.tsx', (s) => s.replace("const BOOK_CALL = '/book-a-demo'", "const BOOK_CALL = '/contact'")),
+  ],
+  [
+    '/government grows a self-serve sign-up link',
+    (d) =>
+      edit(d, 'pages/government.tsx', (s) =>
+        s.replace('<BookCallButton position="footer" />', '<BookCallButton position="footer" />\n<Link href="/build">Build</Link>'),
+      ),
+  ],
+  [
+    '/government CTAs stop reporting themselves',
+    (d) => edit(d, 'pages/government.tsx', (s) => s.replaceAll("track('government_cta_clicked'", "noTrack('government_cta_clicked'")),
+  ],
+  ['the government page is deleted', (d) => fs.rmSync(path.join(d, 'pages/government.tsx'))],
+  // The call path (da-55j.2): /book-a-demo must still end in a booking calendar and report it.
+  [
+    '/book-a-demo stops redirecting to the calendar',
+    (d) => edit(d, 'pages/book-a-demo.tsx', (s) => s.replace('window.location.replace(destination)', '')),
+  ],
+  [
+    '/book-a-demo stops emitting book_a_demo_redirect',
+    (d) => edit(d, 'pages/book-a-demo.tsx', (s) => s.replace("track('book_a_demo_redirect'", "noTrack('book_a_demo_redirect'")),
+  ],
+  [
+    '/book-a-demo identifies the visitor from a URL param',
+    (d) =>
+      edit(d, 'pages/book-a-demo.tsx', (s) =>
+        s.replace('window.location.replace(destination)', "posthog.identify(String(router.query.prospect))\n    window.location.replace(destination)"),
+      ),
+  ],
+  ['the book-a-demo page is deleted', (d) => fs.rmSync(path.join(d, 'pages/book-a-demo.tsx'))],
 ]
 
 let failed = 0
